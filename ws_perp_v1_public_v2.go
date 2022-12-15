@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,7 +17,7 @@ import (
 type PerpWebsocketV1PublicV2Service struct {
 	connection *websocket.Conn
 
-	paramTradeMap map[PerpWebsocketV1PublicV2TradeParamKey]func(PerpWebsocketV1PublicV2TradeResponse) error
+	paramTradeMap map[string]func(PerpWebsocketV1PublicV2TradeResponse) error
 }
 
 const (
@@ -75,11 +76,8 @@ type PerpWebsocketV1PublicV2TradeContent struct {
 }
 
 // Key :
-func (p *PerpWebsocketV1PublicV2TradeResponse) Key() PerpWebsocketV1PublicV2TradeParamKey {
-	return PerpWebsocketV1PublicV2TradeParamKey{
-		//Symbol: p.Params.Symbol,
-		Topic: p.Topic,
-	}
+func (p *PerpWebsocketV1PublicV2TradeResponse) Key() string {
+	return string(p.Topic)
 }
 
 // PerpWebsocketV1PublicV2TradeParamChild :
@@ -91,30 +89,32 @@ type PerpWebsocketV1PublicV2TradeParamChild struct {
 // PerpWebsocketV1PublicV2TradeParam :
 type PerpWebsocketV1PublicV2TradeParam struct {
 	Op   PerpWebsocketV1PublicV2Topic `json:"op"`
-	Args []string                     `json:"args"` //PerpWebsocketV1PublicV2TradeParamChild `json:"args"`
+	Args []string                     `json:"args"`
 }
 
 // Key :
-func (p *PerpWebsocketV1PublicV2TradeParam) Key() PerpWebsocketV1PublicV2TradeParamKey {
-	return PerpWebsocketV1PublicV2TradeParamKey{PerpWebsocketV1PublicV2Topic(p.Args[0])} // todo
+func (p *PerpWebsocketV1PublicV2TradeParam) Key() []string {
+	return p.Args
 }
 
 // addParamTradeFunc :
-func (s *PerpWebsocketV1PublicV2Service) addParamTradeFunc(param PerpWebsocketV1PublicV2TradeParamKey, f func(PerpWebsocketV1PublicV2TradeResponse) error) error {
-	if _, exist := s.paramTradeMap[param]; exist {
-		return errors.New("already registered for this param")
+func (s *PerpWebsocketV1PublicV2Service) addParamTradeFunc(params []string, f func(PerpWebsocketV1PublicV2TradeResponse) error) error {
+	for _, param := range params {
+		if _, exist := s.paramTradeMap[param]; exist {
+			return errors.New("already registered for this param")
+		}
+		s.paramTradeMap[param] = f
 	}
-	s.paramTradeMap[param] = f
 	return nil
 }
 
 // removeParamTradeFunc :
-func (s *PerpWebsocketV1PublicV2Service) removeParamTradeFunc(key PerpWebsocketV1PublicV2TradeParamKey) {
+func (s *PerpWebsocketV1PublicV2Service) removeParamTradeFunc(key string) {
 	delete(s.paramTradeMap, key)
 }
 
 // retrieveTradeFunc :
-func (s *PerpWebsocketV1PublicV2Service) retrieveTradeFunc(key PerpWebsocketV1PublicV2TradeParamKey) (func(PerpWebsocketV1PublicV2TradeResponse) error, error) {
+func (s *PerpWebsocketV1PublicV2Service) retrieveTradeFunc(key string) (func(PerpWebsocketV1PublicV2TradeResponse) error, error) {
 	f, exist := s.paramTradeMap[key]
 	if !exist {
 		return nil, errors.New("func not found")
@@ -146,10 +146,16 @@ func (s *PerpWebsocketV1PublicV2Service) parseResponse(respBody []byte, response
 }
 
 // SubscribeTrade :
-func (s *PerpWebsocketV1PublicV2Service) SubscribeTrade(symbol SymbolPerp, f func(response PerpWebsocketV1PublicV2TradeResponse) error) (func() error, error) {
+func (s *PerpWebsocketV1PublicV2Service) SubscribeTrade(symbols []SymbolPerp, f func(response PerpWebsocketV1PublicV2TradeResponse) error) (func() error, error) {
+
+	var args []string
+	for _, symbol := range symbols {
+		args = append(args, "trade."+string(symbol))
+	}
+
 	param := PerpWebsocketV1PublicV2TradeParam{
 		Op:   PerpWebsocketV1PublicV2EventSubscribe,
-		Args: []string{"trade." + string(symbol)},
+		Args: args,
 	}
 	if err := s.addParamTradeFunc(param.Key(), f); err != nil {
 		return nil, err
@@ -171,7 +177,9 @@ func (s *PerpWebsocketV1PublicV2Service) SubscribeTrade(symbol SymbolPerp, f fun
 		if err := s.connection.WriteMessage(websocket.TextMessage, []byte(buf)); err != nil {
 			return err
 		}
-		s.removeParamTradeFunc(param.Key())
+		for _, key := range param.Key() {
+			s.removeParamTradeFunc(key)
+		}
 		return nil
 	}, nil
 }
@@ -229,12 +237,19 @@ func (s *PerpWebsocketV1PublicV2Service) Run() error {
 		return err
 	}
 
-	topic, err := s.judgeTopic(message)
+	topicFull, err := s.judgeTopic(message) // e.g. trade.BTCUSDT
 	if err != nil {
 		return err
 	}
+
+	var topic PerpWebsocketV1PublicV2Topic
+	topicSplit := strings.Split(string(topicFull), ".")
+	if len(topicSplit) > 0 {
+		topic = PerpWebsocketV1PublicV2Topic(topicSplit[0])
+	}
+
 	switch topic {
-	case "trade.BTCUSDT": //PerpWebsocketV1PublicV2TopicTrade:
+	case PerpWebsocketV1PublicV2TopicTrade:
 		var resp PerpWebsocketV1PublicV2TradeResponse
 		if err := s.parseResponse(message, &resp); err != nil {
 			return err

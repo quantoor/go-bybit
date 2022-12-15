@@ -31,7 +31,7 @@ func (s *PerpWebsocketV1Service) PublicV2() (*PerpWebsocketV1PublicV2Service, er
 	}
 	return &PerpWebsocketV1PublicV2Service{
 		connection:    c,
-		paramTradeMap: map[PerpWebsocketV1PublicV2TradeParamKey]func(PerpWebsocketV1PublicV2TradeResponse) error{},
+		paramTradeMap: map[string]func(PerpWebsocketV1PublicV2TradeResponse) error{},
 	}, nil
 }
 
