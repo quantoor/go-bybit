@@ -95,6 +95,21 @@ func (c *WebSocketClient) Spot() *SpotWebsocketService {
 	return &SpotWebsocketService{c}
 }
 
+// PerpWebsocketService :
+type PerpWebsocketService struct {
+	client *WebSocketClient
+}
+
+// V1 :
+func (s *PerpWebsocketService) V1() *PerpWebsocketV1Service {
+	return &PerpWebsocketV1Service{s.client}
+}
+
+// Perp :
+func (c *WebSocketClient) Perp() *PerpWebsocketService {
+	return &PerpWebsocketService{c}
+}
+
 // WebsocketExecutor :
 type WebsocketExecutor interface {
 	Run() error
