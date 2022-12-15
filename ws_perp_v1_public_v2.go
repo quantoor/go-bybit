@@ -17,6 +17,7 @@ import (
 type PerpWebsocketV1PublicV2Service struct {
 	connection *websocket.Conn
 
+	paramOrderBookL2Map    map[string]func(PerpWebsocketV1PublicV2OrderBookL2Response) error
 	paramTradeMap          map[string]func(PerpWebsocketV1PublicV2TradeResponse) error
 	paramInstrumentInfoMap map[string]func(PerpWebsocketV1PublicV2InstrumentInfoResponse) error
 }
@@ -41,9 +42,104 @@ type PerpWebsocketV1PublicV2Topic string
 
 const (
 	// PerpWebsocketV1PublicV2TopicTrade :
+	PerpWebsocketV1PublicV2TopicOrderBookL2    = PerpWebsocketV1PublicV2Topic("orderBookL2_25")
 	PerpWebsocketV1PublicV2TopicTrade          = PerpWebsocketV1PublicV2Topic("trade")
 	PerpWebsocketV1PublicV2TopicInstrumentInfo = PerpWebsocketV1PublicV2Topic("instrument_info")
 )
+
+// PerpWebsocketV1PublicV2OrderBookL2Response :
+type PerpWebsocketV1PublicV2OrderBookL2Response struct {
+	Topic       PerpWebsocketV1PublicV2Topic              `json:"topic"`
+	Type        string                                    `json:"type"`
+	Data        PerpWebsocketV1PublicV2OrderBookL2Content `json:"data"`
+	CrossSeq    string                                    `json:"cross_seq"`
+	TimestampE6 string                                    `json:"timestamp_e6"`
+}
+
+// PerpWebsocketV1PublicV2OrderBookL2Content :
+type PerpWebsocketV1PublicV2OrderBookL2Content struct {
+	OrderBook []OrderBookItem `json:"order_book"`
+	Delete    []OrderBookItem `json:"delete"`
+	Update    []OrderBookItem `json:"update"`
+	Insert    []OrderBookItem `json:"insert"`
+}
+
+// OrderBookItem :
+type OrderBookItem struct {
+	Price  string  `json:"price"`
+	Symbol string  `json:"symbol"`
+	Side   string  `json:"side"`
+	Size   float64 `json:"size"`
+}
+
+// Key :
+func (p *PerpWebsocketV1PublicV2OrderBookL2Response) Key() string {
+	return string(p.Topic)
+}
+
+// addParamOrderBookL2Func :
+func (s *PerpWebsocketV1PublicV2Service) addParamOrderBookL2Func(params []string, f func(PerpWebsocketV1PublicV2OrderBookL2Response) error) error {
+	for _, param := range params {
+		if _, exist := s.paramInstrumentInfoMap[param]; exist {
+			return errors.New("already registered for this param")
+		}
+		s.paramOrderBookL2Map[param] = f
+	}
+	return nil
+}
+
+// removeParamOrderBookL2Func :
+func (s *PerpWebsocketV1PublicV2Service) removeParamOrderBookL2Func(key string) {
+	delete(s.paramInstrumentInfoMap, key)
+}
+
+// retrieveOrderBookL2Func :
+func (s *PerpWebsocketV1PublicV2Service) retrieveOrderBookL2Func(key string) (func(PerpWebsocketV1PublicV2OrderBookL2Response) error, error) {
+	f, exist := s.paramOrderBookL2Map[key]
+	if !exist {
+		return nil, errors.New("func not found")
+	}
+	return f, nil
+}
+
+// SubscribeOrderBookL2 :
+func (s *PerpWebsocketV1PublicV2Service) SubscribeOrderBookL2(symbols []SymbolPerp, f func(response PerpWebsocketV1PublicV2OrderBookL2Response) error) (func() error, error) {
+
+	var args []string
+	for _, symbol := range symbols {
+		args = append(args, "orderBookL2_25."+string(symbol))
+	}
+
+	param := PerpWebsocketV1PublicV2Params{
+		Op:   PerpWebsocketV1PublicV2EventSubscribe,
+		Args: args,
+	}
+	if err := s.addParamOrderBookL2Func(param.Key(), f); err != nil {
+		return nil, err
+	}
+	buf, err := json.Marshal(param)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.connection.WriteMessage(websocket.TextMessage, []byte(buf)); err != nil {
+		return nil, err
+	}
+
+	return func() error {
+		param.Op = PerpWebsocketV1PublicV2EventUnsubscribe
+		buf, err := json.Marshal(param)
+		if err != nil {
+			return err
+		}
+		if err := s.connection.WriteMessage(websocket.TextMessage, []byte(buf)); err != nil {
+			return err
+		}
+		for _, key := range param.Key() {
+			s.removeParamTradeFunc(key)
+		}
+		return nil
+	}, nil
+}
 
 // PerpWebsocketV1PublicV2TradeParamKey :
 type PerpWebsocketV1PublicV2TradeParamKey struct {
@@ -354,6 +450,18 @@ func (s *PerpWebsocketV1PublicV2Service) Run() error {
 	}
 
 	switch topic {
+	case PerpWebsocketV1PublicV2TopicOrderBookL2:
+		var resp PerpWebsocketV1PublicV2OrderBookL2Response
+		if err := s.parseResponse(message, &resp); err != nil {
+			return err
+		}
+		f, err := s.retrieveOrderBookL2Func(resp.Key())
+		if err != nil {
+			return err
+		}
+		if err := f(resp); err != nil {
+			return err
+		}
 	case PerpWebsocketV1PublicV2TopicTrade:
 		var resp PerpWebsocketV1PublicV2TradeResponse
 		if err := s.parseResponse(message, &resp); err != nil {
