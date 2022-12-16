@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -17,96 +18,25 @@ type PerpWebsocketV1PrivateService struct {
 	client     *WebSocketClient
 	connection *websocket.Conn
 
-	paramOutboundAccountInfoMap map[PerpWebsocketV1PrivateParamKey]func(PerpWebsocketV1PrivateOutboundAccountInfoResponse) error
+	paramOrderEventMap map[string]func(PerpWebsocketV1PrivateV2OrderEventResponse) error
 }
 
 const (
 	// PerpWebsocketV1PrivatePath :
-	PerpWebsocketV1PrivatePath = "/perp/ws"
+	PerpWebsocketV1PrivatePath = "/realtime_private"
 )
 
 // PerpWebsocketV1PrivateEventType :
 type PerpWebsocketV1PrivateEventType string
 
 const (
-	// PerpWebsocketV1PrivateEventTypeOutboundAccountInfo :
-	PerpWebsocketV1PrivateEventTypeOutboundAccountInfo = "outboundAccountInfo"
+	// PerpWebsocketV1PrivateEventTypeOrder :
+	PerpWebsocketV1PrivateEventTypeOrder = "order"
 )
 
 // PerpWebsocketV1PrivateParamKey :
 type PerpWebsocketV1PrivateParamKey struct {
 	EventType PerpWebsocketV1PrivateEventType
-}
-
-// PerpWebsocketV1PrivateOutboundAccountInfoResponse :
-type PerpWebsocketV1PrivateOutboundAccountInfoResponse struct {
-	Content PerpWebsocketV1PrivateOutboundAccountInfoResponseContent
-}
-
-// PerpWebsocketV1PrivateOutboundAccountInfoResponseContent :
-type PerpWebsocketV1PrivateOutboundAccountInfoResponseContent struct {
-	EventType            PerpWebsocketV1PrivateEventType                                        `json:"e"`
-	Timestamp            string                                                                 `json:"E"`
-	AllowTrade           bool                                                                   `json:"T"`
-	AllowWithdraw        bool                                                                   `json:"W"`
-	AllowWDeposit        bool                                                                   `json:"D"`
-	WalletBalanceChanges []PerpWebsocketV1PrivateOutboundAccountInfoResponseWalletBalanceChange `json:"B"`
-}
-
-// PerpWebsocketV1PrivateOutboundAccountInfoResponseWalletBalanceChange :
-type PerpWebsocketV1PrivateOutboundAccountInfoResponseWalletBalanceChange struct {
-	SymbolName       string `json:"a"`
-	AvailableBalance string `json:"f"`
-	ReservedBalance  string `json:"l"`
-}
-
-// UnmarshalJSON :
-func (r *PerpWebsocketV1PrivateOutboundAccountInfoResponse) UnmarshalJSON(data []byte) error {
-	parsedArrayData := []map[string]interface{}{}
-	if err := json.Unmarshal(data, &parsedArrayData); err != nil {
-		return err
-	}
-	if len(parsedArrayData) != 1 {
-		return errors.New("unexpected response")
-	}
-	buf, err := json.Marshal(parsedArrayData[0])
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(buf, &r.Content); err != nil {
-		return err
-	}
-	return nil
-}
-
-// MarshalJSON :
-func (r *PerpWebsocketV1PrivateOutboundAccountInfoResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.Content)
-}
-
-// Key :
-func (r *PerpWebsocketV1PrivateOutboundAccountInfoResponse) Key() PerpWebsocketV1PrivateParamKey {
-	return PerpWebsocketV1PrivateParamKey{
-		EventType: r.Content.EventType,
-	}
-}
-
-// addParamOutboundAccountInfoFunc :
-func (s *PerpWebsocketV1PrivateService) addParamOutboundAccountInfoFunc(param PerpWebsocketV1PrivateParamKey, f func(PerpWebsocketV1PrivateOutboundAccountInfoResponse) error) error {
-	if _, exist := s.paramOutboundAccountInfoMap[param]; exist {
-		return errors.New("already registered for this param")
-	}
-	s.paramOutboundAccountInfoMap[param] = f
-	return nil
-}
-
-// retrieveOutboundAccountInfoFunc :
-func (s *PerpWebsocketV1PrivateService) retrieveOutboundAccountInfoFunc(key PerpWebsocketV1PrivateParamKey) (func(PerpWebsocketV1PrivateOutboundAccountInfoResponse) error, error) {
-	f, exist := s.paramOutboundAccountInfoMap[key]
-	if !exist {
-		return nil, errors.New("func not found")
-	}
-	return f, nil
 }
 
 type perpWebsocketV1PrivateEventJudge struct {
@@ -155,8 +85,8 @@ func (s *PerpWebsocketV1PrivateService) parseResponse(respBody []byte, response 
 	return nil
 }
 
-// Subscribe :
-func (s *PerpWebsocketV1PrivateService) Subscribe() error {
+// Authenticate :
+func (s *PerpWebsocketV1PrivateService) Authenticate() error {
 	param, err := s.client.buildAuthParam()
 	if err != nil {
 		return err
@@ -167,15 +97,103 @@ func (s *PerpWebsocketV1PrivateService) Subscribe() error {
 	return nil
 }
 
-// RegisterFuncOutboundAccountInfo :
-func (s *PerpWebsocketV1PrivateService) RegisterFuncOutboundAccountInfo(f func(PerpWebsocketV1PrivateOutboundAccountInfoResponse) error) error {
-	key := PerpWebsocketV1PrivateParamKey{
-		EventType: PerpWebsocketV1PrivateEventTypeOutboundAccountInfo,
-	}
-	if err := s.addParamOutboundAccountInfoFunc(key, f); err != nil {
-		return err
+// PerpWebsocketV1PrivateV2OrderEventResponse :
+type PerpWebsocketV1PrivateV2OrderEventResponse struct {
+	Topic  PerpWebsocketV1PublicV2Topic                `json:"topic"`
+	Action string                                      `json:"action"`
+	Data   []PerpWebsocketV1PrivateV2OrderEventContent `json:"data"`
+}
+
+// PerpWebsocketV1PrivateV2OrderEventContent :
+type PerpWebsocketV1PrivateV2OrderEventContent struct {
+	OrderID string `json:"order_id"`
+	//OrderID string `json:"order_link_id"`
+	Symbol            string `json:"symbol"`
+	Side              string `json:"side"`
+	OrderType         string `json:"order_type"`
+	Price             string `json:"price"`
+	Quantity          string `json:"qty"`
+	RemainingQuantity string `json:"leaves_qty"`
+	//OrderID string `json:"last_exec_price"`
+	//OrderID string `json:"cum_exec_qty"`
+	//OrderID string `json:"cum_exec_value"`
+	//OrderID string `json:"cum_exec_fee"`
+	TimeInForce string `json:"time_in_force"`
+	CreateType  string `json:"create_type"`
+	CancelType  string `json:"cancel_type"`
+	OrderStatus string `json:"order_status"`
+	//OrderID string `json:"take_profit"`
+	//OrderID string `json:"stop_loss"`
+	//OrderID string `json:"trailing_stop"`
+	CreateTime string `json:"create_time"`
+	UpdateTime string `json:"update_time"`
+	ReduceOnly string `json:"reduce_only"`
+	//OrderID string `json:"close_on_trigger"`
+	//OrderID string `json:"position_idx"`
+}
+
+// Key :
+func (p *PerpWebsocketV1PrivateV2OrderEventResponse) Key() string {
+	return string(p.Topic)
+}
+
+// addParamOrderEventFunc :
+func (s *PerpWebsocketV1PrivateService) addParamOrderEventFunc(params []string, f func(PerpWebsocketV1PrivateV2OrderEventResponse) error) error {
+	for _, param := range params {
+		if _, exist := s.paramOrderEventMap[param]; exist {
+			return errors.New("already registered for this param")
+		}
+		s.paramOrderEventMap[param] = f
 	}
 	return nil
+}
+
+// removeParamOrderEventFunc :
+func (s *PerpWebsocketV1PrivateService) removeParamOrderEventFunc(key string) {
+	delete(s.paramOrderEventMap, key)
+}
+
+// retrieveOrderEventunc :
+func (s *PerpWebsocketV1PrivateService) retrieveOrderEventunc(key string) (func(PerpWebsocketV1PrivateV2OrderEventResponse) error, error) {
+	f, exist := s.paramOrderEventMap[key]
+	if !exist {
+		return nil, errors.New("func not found")
+	}
+	return f, nil
+}
+
+// SubscribeOrderEvent :
+func (s *PerpWebsocketV1PrivateService) SubscribeOrderEvent(f func(response PerpWebsocketV1PrivateV2OrderEventResponse) error) (func() error, error) {
+
+	param := PerpWebsocketV1PublicV2Params{
+		Op:   PerpWebsocketV1PublicV2EventSubscribe,
+		Args: []string{"order"},
+	}
+	if err := s.addParamOrderEventFunc(param.Key(), f); err != nil {
+		return nil, err
+	}
+	buf, err := json.Marshal(param)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.connection.WriteMessage(websocket.TextMessage, []byte(buf)); err != nil {
+		return nil, err
+	}
+
+	return func() error {
+		param.Op = PerpWebsocketV1PublicV2EventUnsubscribe
+		buf, err := json.Marshal(param)
+		if err != nil {
+			return err
+		}
+		if err := s.connection.WriteMessage(websocket.TextMessage, []byte(buf)); err != nil {
+			return err
+		}
+		for _, key := range param.Key() {
+			s.removeParamOrderEventFunc(key)
+		}
+		return nil
+	}, nil
 }
 
 // Start :
@@ -236,13 +254,18 @@ func (s *PerpWebsocketV1PrivateService) Run() error {
 	if err != nil {
 		return err
 	}
+	fmt.Println(topic)
+	if topic == "" {
+		return nil
+	}
+
 	switch topic {
-	case PerpWebsocketV1PrivateEventTypeOutboundAccountInfo:
-		var resp PerpWebsocketV1PrivateOutboundAccountInfoResponse
+	case PerpWebsocketV1PrivateEventTypeOrder:
+		var resp PerpWebsocketV1PrivateV2OrderEventResponse
 		if err := s.parseResponse(message, &resp); err != nil {
 			return err
 		}
-		f, err := s.retrieveOutboundAccountInfoFunc(resp.Key())
+		f, err := s.retrieveOrderEventunc(resp.Key())
 		if err != nil {
 			return err
 		}
