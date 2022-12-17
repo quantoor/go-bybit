@@ -45,8 +45,9 @@ func (s *PerpWebsocketV1Service) Private() (*PerpWebsocketV1PrivateService, erro
 		return nil, err
 	}
 	return &PerpWebsocketV1PrivateService{
-		client:             s.client,
-		connection:         c,
-		paramOrderEventMap: map[string]func(PerpWebsocketV1PrivateV2OrderEventResponse) error{},
+		client:                 s.client,
+		connection:             c,
+		paramExecutionEventMap: map[string]func(PerpWebsocketV1PrivateExecutionEventResponse) error{},
+		paramOrderEventMap:     map[string]func(PerpWebsocketV1PrivateOrderEventResponse) error{},
 	}, nil
 }

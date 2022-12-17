@@ -17,7 +17,8 @@ type PerpWebsocketV1PrivateService struct {
 	client     *WebSocketClient
 	connection *websocket.Conn
 
-	paramOrderEventMap map[string]func(PerpWebsocketV1PrivateV2OrderEventResponse) error
+	paramExecutionEventMap map[string]func(PerpWebsocketV1PrivateExecutionEventResponse) error
+	paramOrderEventMap     map[string]func(PerpWebsocketV1PrivateOrderEventResponse) error
 }
 
 const (
@@ -29,6 +30,8 @@ const (
 type PerpWebsocketV1PrivateEventType string
 
 const (
+	// PerpWebsocketV1PrivateEventTypeExecution :
+	PerpWebsocketV1PrivateEventTypeExecution = "execution"
 	// PerpWebsocketV1PrivateEventTypeOrder :
 	PerpWebsocketV1PrivateEventTypeOrder = "order"
 )
@@ -99,15 +102,15 @@ func (s *PerpWebsocketV1PrivateService) Authenticate() error {
 	return nil
 }
 
-// PerpWebsocketV1PrivateV2OrderEventResponse :
-type PerpWebsocketV1PrivateV2OrderEventResponse struct {
-	Topic  PerpWebsocketV1PublicV2Topic                `json:"topic"`
-	Action string                                      `json:"action"`
-	Data   []PerpWebsocketV1PrivateV2OrderEventContent `json:"data"`
+// PerpWebsocketV1PrivateExecutionEventResponse :
+type PerpWebsocketV1PrivateExecutionEventResponse struct {
+	Topic  PerpWebsocketV1PublicV2Topic              `json:"topic"`
+	Action string                                    `json:"action"`
+	Data   []PerpWebsocketV1PrivateOrderEventContent `json:"data"`
 }
 
-// PerpWebsocketV1PrivateV2OrderEventContent :
-type PerpWebsocketV1PrivateV2OrderEventContent struct {
+// PerpWebsocketV1PrivateExecutionEventContent :
+type PerpWebsocketV1PrivateExecutionEventContent struct {
 	OrderID string `json:"order_id"`
 	//OrderID string `json:"order_link_id"`
 	Symbol            string  `json:"symbol"`
@@ -135,12 +138,111 @@ type PerpWebsocketV1PrivateV2OrderEventContent struct {
 }
 
 // Key :
-func (p *PerpWebsocketV1PrivateV2OrderEventResponse) Key() string {
+func (p *PerpWebsocketV1PrivateExecutionEventResponse) Key() string {
+	return string(p.Topic)
+}
+
+// addParamExecutionEventFunc :
+func (s *PerpWebsocketV1PrivateService) addParamExecutionEventFunc(params []string, f func(PerpWebsocketV1PrivateExecutionEventResponse) error) error {
+	for _, param := range params {
+		if _, exist := s.paramExecutionEventMap[param]; exist {
+			return errors.New("already registered for this param")
+		}
+		s.paramExecutionEventMap[param] = f
+	}
+	return nil
+}
+
+// removeParamExecutionEventFunc :
+func (s *PerpWebsocketV1PrivateService) removeParamExecutionEventFunc(key string) {
+	delete(s.paramOrderEventMap, key)
+}
+
+// retrieveExecutionEventFunc :
+func (s *PerpWebsocketV1PrivateService) retrieveExecutionEventFunc(key string) (func(PerpWebsocketV1PrivateExecutionEventResponse) error, error) {
+	f, exist := s.paramExecutionEventMap[key]
+	if !exist {
+		return nil, errors.New("func not found")
+	}
+	return f, nil
+}
+
+// SubscribeExecutionEvent :
+func (s *PerpWebsocketV1PrivateService) SubscribeExecutionEvent(f func(response PerpWebsocketV1PrivateExecutionEventResponse) error) (func() error, error) {
+
+	param := PerpWebsocketV1PublicV2Params{
+		Op:   "subscribe",
+		Args: []string{"execution"},
+	}
+	if err := s.addParamExecutionEventFunc(param.Key(), f); err != nil {
+		return nil, err
+	}
+	buf, err := json.Marshal(param)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.connection.WriteMessage(websocket.TextMessage, []byte(buf)); err != nil {
+		return nil, err
+	}
+
+	return func() error {
+		param.Op = "unsubscribe"
+		buf, err := json.Marshal(param)
+		if err != nil {
+			return err
+		}
+		if err := s.connection.WriteMessage(websocket.TextMessage, []byte(buf)); err != nil {
+			return err
+		}
+		for _, key := range param.Key() {
+			s.removeParamOrderEventFunc(key)
+		}
+		return nil
+	}, nil
+}
+
+// PerpWebsocketV1PrivateOrderEventResponse :
+type PerpWebsocketV1PrivateOrderEventResponse struct {
+	Topic  PerpWebsocketV1PublicV2Topic              `json:"topic"`
+	Action string                                    `json:"action"`
+	Data   []PerpWebsocketV1PrivateOrderEventContent `json:"data"`
+}
+
+// PerpWebsocketV1PrivateOrderEventContent :
+type PerpWebsocketV1PrivateOrderEventContent struct {
+	OrderID string `json:"order_id"`
+	//OrderID string `json:"order_link_id"`
+	Symbol            string  `json:"symbol"`
+	Side              string  `json:"side"`
+	OrderType         string  `json:"order_type"`
+	Price             float64 `json:"price"`
+	Quantity          float64 `json:"qty"`
+	RemainingQuantity float64 `json:"leaves_qty"`
+	//OrderID string `json:"last_exec_price"`
+	//OrderID string `json:"cum_exec_qty"`
+	//OrderID string `json:"cum_exec_value"`
+	//OrderID string `json:"cum_exec_fee"`
+	TimeInForce string `json:"time_in_force"`
+	CreateType  string `json:"create_type"`
+	CancelType  string `json:"cancel_type"`
+	OrderStatus string `json:"order_status"`
+	//OrderID string `json:"take_profit"`
+	//OrderID string `json:"stop_loss"`
+	//OrderID string `json:"trailing_stop"`
+	CreateTime string `json:"create_time"`
+	UpdateTime string `json:"update_time"`
+	ReduceOnly bool   `json:"reduce_only"`
+	//OrderID string `json:"close_on_trigger"`
+	//OrderID string `json:"position_idx"`
+}
+
+// Key :
+func (p *PerpWebsocketV1PrivateOrderEventResponse) Key() string {
 	return string(p.Topic)
 }
 
 // addParamOrderEventFunc :
-func (s *PerpWebsocketV1PrivateService) addParamOrderEventFunc(params []string, f func(PerpWebsocketV1PrivateV2OrderEventResponse) error) error {
+func (s *PerpWebsocketV1PrivateService) addParamOrderEventFunc(params []string, f func(PerpWebsocketV1PrivateOrderEventResponse) error) error {
 	for _, param := range params {
 		if _, exist := s.paramOrderEventMap[param]; exist {
 			return errors.New("already registered for this param")
@@ -156,7 +258,7 @@ func (s *PerpWebsocketV1PrivateService) removeParamOrderEventFunc(key string) {
 }
 
 // retrieveOrderEventFunc :
-func (s *PerpWebsocketV1PrivateService) retrieveOrderEventFunc(key string) (func(PerpWebsocketV1PrivateV2OrderEventResponse) error, error) {
+func (s *PerpWebsocketV1PrivateService) retrieveOrderEventFunc(key string) (func(PerpWebsocketV1PrivateOrderEventResponse) error, error) {
 	f, exist := s.paramOrderEventMap[key]
 	if !exist {
 		return nil, errors.New("func not found")
@@ -165,7 +267,7 @@ func (s *PerpWebsocketV1PrivateService) retrieveOrderEventFunc(key string) (func
 }
 
 // SubscribeOrderEvent :
-func (s *PerpWebsocketV1PrivateService) SubscribeOrderEvent(f func(response PerpWebsocketV1PrivateV2OrderEventResponse) error) (func() error, error) {
+func (s *PerpWebsocketV1PrivateService) SubscribeOrderEvent(f func(response PerpWebsocketV1PrivateOrderEventResponse) error) (func() error, error) {
 
 	param := PerpWebsocketV1PublicV2Params{
 		Op:   "subscribe",
@@ -258,8 +360,20 @@ func (s *PerpWebsocketV1PrivateService) Run() error {
 	}
 
 	switch topic {
+	case PerpWebsocketV1PrivateEventTypeExecution:
+		var resp PerpWebsocketV1PrivateExecutionEventResponse
+		if err := s.parseResponse(message, &resp); err != nil {
+			return err
+		}
+		f, err := s.retrieveExecutionEventFunc(resp.Key())
+		if err != nil {
+			return err
+		}
+		if err := f(resp); err != nil {
+			return err
+		}
 	case PerpWebsocketV1PrivateEventTypeOrder:
-		var resp PerpWebsocketV1PrivateV2OrderEventResponse
+		var resp PerpWebsocketV1PrivateOrderEventResponse
 		if err := s.parseResponse(message, &resp); err != nil {
 			return err
 		}
