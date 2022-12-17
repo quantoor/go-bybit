@@ -14,10 +14,12 @@ import (
 )
 
 const (
-	// WebsocketBaseURL :
-	WebsocketBaseURL = "wss://stream.bybit.com"
-	// WebsocketBaseURL2 :
-	WebsocketBaseURL2 = "wss://stream.bytick.com"
+	// WebsocketMainnetBaseURL :
+	WebsocketMainnetBaseURL = "wss://stream.bybit.com"
+	// WebsocketMainnetBaseURL2 :
+	WebsocketMainnetBaseURL2 = "wss://stream.bytick.com"
+	// WebSocketTestnetBaseURL :
+	WebSocketTestnetBaseURL = "wss://stream-testnet.bybit.com"
 )
 
 // WebSocketClient :
@@ -30,7 +32,7 @@ type WebSocketClient struct {
 // NewWebsocketClient :
 func NewWebsocketClient() *WebSocketClient {
 	return &WebSocketClient{
-		baseURL: WebsocketBaseURL,
+		baseURL: WebsocketMainnetBaseURL,
 	}
 }
 

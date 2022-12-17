@@ -21,6 +21,8 @@ const (
 	MainNetBaseURL = "https://api.bybit.com"
 	// MainNetBaseURL2 :
 	MainNetBaseURL2 = "https://api.bytick.com"
+	// TestnetBaseURL :
+	TestnetBaseURL = "https://api-testnet.bybit.com"
 )
 
 // Client :
