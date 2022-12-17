@@ -58,10 +58,12 @@ type PerpWebsocketV1PublicV2OrderBookL2Response struct {
 
 // PerpWebsocketV1PublicV2OrderBookL2Content :
 type PerpWebsocketV1PublicV2OrderBookL2Content struct {
+	// shapshot
 	OrderBook []OrderBookItem `json:"order_book"`
-	Delete    []OrderBookItem `json:"delete"`
-	Update    []OrderBookItem `json:"update"`
-	Insert    []OrderBookItem `json:"insert"`
+	// delta update
+	Delete []OrderBookItem `json:"delete"`
+	Update []OrderBookItem `json:"update"`
+	Insert []OrderBookItem `json:"insert"`
 }
 
 // OrderBookItem :

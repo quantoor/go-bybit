@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -40,14 +39,14 @@ type PerpWebsocketV1PrivateParamKey struct {
 }
 
 type perpWebsocketV1PrivateEventJudge struct {
-	EventType PerpWebsocketV1PrivateEventType
+	Topic PerpWebsocketV1PrivateEventType `json:"topic"`
 }
 
 func (r *perpWebsocketV1PrivateEventJudge) UnmarshalJSON(data []byte) error {
 	parsedData := map[string]interface{}{}
 	if err := json.Unmarshal(data, &parsedData); err == nil {
 		if event, ok := parsedData["e"].(string); ok {
-			r.EventType = PerpWebsocketV1PrivateEventType(event)
+			r.Topic = PerpWebsocketV1PrivateEventType(event)
 		}
 		if authStatus, ok := parsedData["auth"].(string); ok {
 			if authStatus != "success" {
@@ -64,17 +63,20 @@ func (r *perpWebsocketV1PrivateEventJudge) UnmarshalJSON(data []byte) error {
 	if len(parsedArrayData) != 1 {
 		return errors.New("unexpected response")
 	}
-	r.EventType = PerpWebsocketV1PrivateEventType(parsedArrayData[0]["e"].(string))
+	r.Topic = PerpWebsocketV1PrivateEventType(parsedArrayData[0]["e"].(string))
 	return nil
 }
 
 // judgeEventType :
-func (s *PerpWebsocketV1PrivateService) judgeEventType(respBody []byte) (PerpWebsocketV1PrivateEventType, error) {
-	var result perpWebsocketV1PrivateEventJudge
+func (s *PerpWebsocketV1PrivateService) judgeTopic(respBody []byte) (PerpWebsocketV1PrivateEventType, error) {
+	//result := perpWebsocketV1PrivateEventJudge{}
+	result := struct {
+		Topic PerpWebsocketV1PrivateEventType `json:"topic"`
+	}{}
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return "", err
 	}
-	return result.EventType, nil
+	return result.Topic, nil
 }
 
 // parseResponse :
@@ -108,12 +110,12 @@ type PerpWebsocketV1PrivateV2OrderEventResponse struct {
 type PerpWebsocketV1PrivateV2OrderEventContent struct {
 	OrderID string `json:"order_id"`
 	//OrderID string `json:"order_link_id"`
-	Symbol            string `json:"symbol"`
-	Side              string `json:"side"`
-	OrderType         string `json:"order_type"`
-	Price             string `json:"price"`
-	Quantity          string `json:"qty"`
-	RemainingQuantity string `json:"leaves_qty"`
+	Symbol            string  `json:"symbol"`
+	Side              string  `json:"side"`
+	OrderType         string  `json:"order_type"`
+	Price             float64 `json:"price"`
+	Quantity          float64 `json:"qty"`
+	RemainingQuantity float64 `json:"leaves_qty"`
 	//OrderID string `json:"last_exec_price"`
 	//OrderID string `json:"cum_exec_qty"`
 	//OrderID string `json:"cum_exec_value"`
@@ -127,7 +129,7 @@ type PerpWebsocketV1PrivateV2OrderEventContent struct {
 	//OrderID string `json:"trailing_stop"`
 	CreateTime string `json:"create_time"`
 	UpdateTime string `json:"update_time"`
-	ReduceOnly string `json:"reduce_only"`
+	ReduceOnly bool   `json:"reduce_only"`
 	//OrderID string `json:"close_on_trigger"`
 	//OrderID string `json:"position_idx"`
 }
@@ -153,8 +155,8 @@ func (s *PerpWebsocketV1PrivateService) removeParamOrderEventFunc(key string) {
 	delete(s.paramOrderEventMap, key)
 }
 
-// retrieveOrderEventunc :
-func (s *PerpWebsocketV1PrivateService) retrieveOrderEventunc(key string) (func(PerpWebsocketV1PrivateV2OrderEventResponse) error, error) {
+// retrieveOrderEventFunc :
+func (s *PerpWebsocketV1PrivateService) retrieveOrderEventFunc(key string) (func(PerpWebsocketV1PrivateV2OrderEventResponse) error, error) {
 	f, exist := s.paramOrderEventMap[key]
 	if !exist {
 		return nil, errors.New("func not found")
@@ -166,7 +168,7 @@ func (s *PerpWebsocketV1PrivateService) retrieveOrderEventunc(key string) (func(
 func (s *PerpWebsocketV1PrivateService) SubscribeOrderEvent(f func(response PerpWebsocketV1PrivateV2OrderEventResponse) error) (func() error, error) {
 
 	param := PerpWebsocketV1PublicV2Params{
-		Op:   PerpWebsocketV1PublicV2EventSubscribe,
+		Op:   "subscribe",
 		Args: []string{"order"},
 	}
 	if err := s.addParamOrderEventFunc(param.Key(), f); err != nil {
@@ -181,7 +183,7 @@ func (s *PerpWebsocketV1PrivateService) SubscribeOrderEvent(f func(response Perp
 	}
 
 	return func() error {
-		param.Op = PerpWebsocketV1PublicV2EventUnsubscribe
+		param.Op = "unsubscribe"
 		buf, err := json.Marshal(param)
 		if err != nil {
 			return err
@@ -250,13 +252,9 @@ func (s *PerpWebsocketV1PrivateService) Run() error {
 		return err
 	}
 
-	topic, err := s.judgeEventType(message)
+	topic, err := s.judgeTopic(message)
 	if err != nil {
 		return err
-	}
-	fmt.Println(topic)
-	if topic == "" {
-		return nil
 	}
 
 	switch topic {
@@ -265,7 +263,7 @@ func (s *PerpWebsocketV1PrivateService) Run() error {
 		if err := s.parseResponse(message, &resp); err != nil {
 			return err
 		}
-		f, err := s.retrieveOrderEventunc(resp.Key())
+		f, err := s.retrieveOrderEventFunc(resp.Key())
 		if err != nil {
 			return err
 		}

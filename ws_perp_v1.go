@@ -39,7 +39,7 @@ func (s *PerpWebsocketV1Service) PublicV2() (*PerpWebsocketV1PublicV2Service, er
 
 // Private :
 func (s *PerpWebsocketV1Service) Private() (*PerpWebsocketV1PrivateService, error) {
-	url := s.client.baseURL + SpotWebsocketV1PrivatePath
+	url := s.client.baseURL + PerpWebsocketV1PrivatePath
 	c, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		return nil, err
