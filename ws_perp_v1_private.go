@@ -210,30 +210,30 @@ type PerpWebsocketV1PrivateOrderEventResponse struct {
 
 // PerpWebsocketV1PrivateOrderEventContent :
 type PerpWebsocketV1PrivateOrderEventContent struct {
-	OrderID string `json:"order_id"`
-	//OrderID string `json:"order_link_id"`
-	Symbol            string  `json:"symbol"`
-	Side              string  `json:"side"`
-	OrderType         string  `json:"order_type"`
-	Price             float64 `json:"price"`
-	Quantity          float64 `json:"qty"`
-	RemainingQuantity float64 `json:"leaves_qty"`
-	//OrderID string `json:"last_exec_price"`
-	//OrderID string `json:"cum_exec_qty"`
-	//OrderID string `json:"cum_exec_value"`
-	//OrderID string `json:"cum_exec_fee"`
-	TimeInForce string `json:"time_in_force"`
-	CreateType  string `json:"create_type"`
-	CancelType  string `json:"cancel_type"`
-	OrderStatus string `json:"order_status"`
-	//OrderID string `json:"take_profit"`
-	//OrderID string `json:"stop_loss"`
-	//OrderID string `json:"trailing_stop"`
-	CreateTime string `json:"create_time"`
-	UpdateTime string `json:"update_time"`
-	ReduceOnly bool   `json:"reduce_only"`
-	//OrderID string `json:"close_on_trigger"`
-	//OrderID string `json:"position_idx"`
+	OrderID        string    `json:"order_id"`
+	OrderLinkID    string    `json:"order_link_id"`
+	Symbol         string    `json:"symbol"`
+	Side           string    `json:"side"`
+	OrderType      string    `json:"order_type"`
+	Price          float64   `json:"price"`
+	Qty            float64   `json:"qty"`
+	LeavesQty      float64   `json:"leaves_qty"`
+	LastExecPrice  float64   `json:"last_exec_price"`
+	CumExecQty     float64   `json:"cum_exec_qty"`
+	CumExecValue   float64   `json:"cum_exec_value"`
+	CumExecFee     float64   `json:"cum_exec_fee"`
+	TimeInForce    string    `json:"time_in_force"`
+	CreateType     string    `json:"create_type"`
+	CancelType     string    `json:"cancel_type"`
+	OrderStatus    string    `json:"order_status"`
+	TakeProfit     float64   `json:"take_profit"`
+	StopLoss       float64   `json:"stop_loss"`
+	TrailingStop   float64   `json:"trailing_stop"`
+	CreateTime     time.Time `json:"create_time"`
+	UpdateTime     time.Time `json:"update_time"`
+	ReduceOnly     bool      `json:"reduce_only"`
+	CloseOnTrigger bool      `json:"close_on_trigger"`
+	PositionIdx    string    `json:"position_idx"`
 }
 
 // Key :
