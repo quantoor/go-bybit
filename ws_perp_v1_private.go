@@ -104,37 +104,26 @@ func (s *PerpWebsocketV1PrivateService) Authenticate() error {
 
 // PerpWebsocketV1PrivateExecutionEventResponse :
 type PerpWebsocketV1PrivateExecutionEventResponse struct {
-	Topic  PerpWebsocketV1PublicV2Topic              `json:"topic"`
-	Action string                                    `json:"action"`
-	Data   []PerpWebsocketV1PrivateOrderEventContent `json:"data"`
+	Topic  PerpWebsocketV1PublicV2Topic                  `json:"topic"`
+	Action string                                        `json:"action"`
+	Data   []PerpWebsocketV1PrivateExecutionEventContent `json:"data"`
 }
 
 // PerpWebsocketV1PrivateExecutionEventContent :
 type PerpWebsocketV1PrivateExecutionEventContent struct {
-	OrderID string `json:"order_id"`
-	//OrderID string `json:"order_link_id"`
-	Symbol            string  `json:"symbol"`
-	Side              string  `json:"side"`
-	OrderType         string  `json:"order_type"`
-	Price             float64 `json:"price"`
-	Quantity          float64 `json:"qty"`
-	RemainingQuantity float64 `json:"leaves_qty"`
-	//OrderID string `json:"last_exec_price"`
-	//OrderID string `json:"cum_exec_qty"`
-	//OrderID string `json:"cum_exec_value"`
-	//OrderID string `json:"cum_exec_fee"`
-	TimeInForce string `json:"time_in_force"`
-	CreateType  string `json:"create_type"`
-	CancelType  string `json:"cancel_type"`
-	OrderStatus string `json:"order_status"`
-	//OrderID string `json:"take_profit"`
-	//OrderID string `json:"stop_loss"`
-	//OrderID string `json:"trailing_stop"`
-	CreateTime string `json:"create_time"`
-	UpdateTime string `json:"update_time"`
-	ReduceOnly bool   `json:"reduce_only"`
-	//OrderID string `json:"close_on_trigger"`
-	//OrderID string `json:"position_idx"`
+	Symbol      string    `json:"symbol"`
+	Side        string    `json:"side"`
+	OrderId     string    `json:"order_id"`
+	ExecId      string    `json:"exec_id"`
+	OrderLinkId string    `json:"order_link_id"`
+	Price       float64   `json:"price"`
+	OrderQty    float64   `json:"order_qty"`
+	ExecType    string    `json:"exec_type"`
+	ExecQty     float64   `json:"exec_qty"`
+	ExecFee     float64   `json:"exec_fee"`
+	LeavesQty   float64   `json:"leaves_qty"`
+	IsMaker     bool      `json:"is_maker"`
+	TradeTime   time.Time `json:"trade_time"`
 }
 
 // Key :
